@@ -7,9 +7,9 @@
 
 规则：
 - 起始时间固定为 17:45
-- 从 17:45 起，每 30 分钟为一个计时单位
-- 只有完整的 30 分钟才计入，余数丢弃
-- 示例：当前时间 20:14 → 从 17:45 到 20:14 共 149 分钟 → 4 个完整块 → 结束时间 19:45
+- 18:00 之前不统计
+- 18:00 之后，从 17:45 起向上取整到最近的 30 分钟块
+- 示例：当前时间 20:14 → 从 17:45 到 20:14 共 149 分钟 → 向上取整 5 个块 → 结束时间 20:15
 
 用法:
     python calculate_diligent_time.py
@@ -19,6 +19,7 @@
 import sys
 import io
 import argparse
+import math
 from datetime import datetime, timedelta
 
 # 解决 Windows 控制台 GBK 编码问题
@@ -35,19 +36,15 @@ def calculate_diligent_time(now=None):
     # 起始时间固定为当天的 17:45
     start = now.replace(hour=17, minute=45, second=0, microsecond=0)
 
-    if now <= start:
-        print("当前时间未到 17:45，无需计算勤奋时间。")
+    if now < now.replace(hour=18, minute=0, second=0, microsecond=0):
+        print("当前时间未到 18:00，无需计算勤奋时间。")
         return
 
     # 从 17:45 到现在的分钟数
     delta_minutes = (now - start).total_seconds() / 60
 
-    # 完整的 30 分钟块数
-    full_blocks = int(delta_minutes // 30)
-
-    if full_blocks == 0:
-        print("勤奋时间不足 30 分钟，不计入。")
-        return
+    # 向上取整到最近的 30 分钟块
+    full_blocks = math.ceil(delta_minutes / 30)
 
     end = start + timedelta(minutes=full_blocks * 30)
     end_time = end.strftime("%H:%M")
