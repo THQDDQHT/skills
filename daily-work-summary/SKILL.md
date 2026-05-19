@@ -1,19 +1,54 @@
 ---
 name: daily-work-summary
-description: Use when the user asks for a Chinese daily work summary, work log, day-end review, objective workplace recap, or a summary generated from daily Git commits. Supports extracting Git commit records with the bundled daily_git_commits.py script, then rewriting them into strict Chinese prose with no evaluative claims and a required three-item opening.
+description: Use when the user asks for a Chinese daily work summary, work log, day-end review, or a summary generated from daily Git commits. Output is a plain text log with "工作内容", "工作思考", and "勤奋时间" sections. Includes bundled scripts for Git commit extraction and diligent time calculation.
 ---
 
 # Daily Work Summary
 
-## Core Principle
+## Output Format
 
-Write an objective Chinese daily work summary that records what was handled, how it was handled, what was difficult, and what can be followed up, without claiming value, benefit, impact, or quality improvement.
+Generate a plain text daily log following this structure:
 
-When requirements conflict, use the user's confirmed口径: write limited context only. Explain the work's background, process position, scope, and relationship to other work, but do not evaluate outcomes.
+```text
+工作内容：
+1. 参加低代码平台晨会，同步了当前的问题处理进度。
+2. 处理了社招人员的招聘申请流程。
+3. 参与讨论了图形组态工具的应用场景。
+4. 和张三碰了一下分组汇总算子的设计方案。结合市面上的竞品，仔细梳理了各种应用场景，对于用户交互和配置项的设计有了更清晰的想法。
+5. 编写并完善通用计算引擎一阶段的需求文档。
+6. 参加技术部周例会。
+
+工作思考：
+1. 今天重点琢磨了分组汇总算子。在对比了几个主流工具后，我发现交互设计的关键在于如何平衡"灵活性"和"易用性"。之前我们的设计有点过于追求大而全，反倒增加了用户的理解成本。接下来的设计里，我觉得应该做减法，把最核心的配置项暴露出来，其他的折叠或者由系统智能推导。
+
+[勤奋时间][17:45][19:45]
+勤奋工作内容: 继续深入完善通用计算引擎的需求文档
+```
+
+### Section Rules
+
+**工作内容** (required):
+- Numbered list using `1. 2. 3. ...` format.
+- Each item is one work activity, written as a complete Chinese sentence ending with `。`.
+- Be specific: include project names, feature names, people's names where relevant.
+- For meetings/discussions, briefly state the topic and key points.
+- For code/document work, state what was being worked on.
+- For interviews, briefly note the result.
+
+**工作思考** (optional):
+- Numbered list. Omit the entire section when there is nothing meaningful to reflect on.
+- More conversational tone. First person is fine.
+- Describe insights, design considerations, lessons learned, or follow-up plans.
+
+**勤奋时间** (auto-calculated):
+- Run `python scripts/calculate_diligent_time.py` to get the end time.
+- Start time is always 17:45. End time is in 30-minute increments from 17:45.
+- Followed by `勤奋工作内容:` describing what was done during overtime.
+- If the script outputs no valid time (before 18:15 or before 17:45), omit the entire section.
 
 ## Git Commit Source
 
-When the user asks to generate a daily summary from Git commits, use the bundled script `scripts/daily_git_commits.py` as the source extractor before writing the final summary.
+When the user asks to generate a daily summary from Git commits, use the bundled script `scripts/daily_git_commits.py` to extract commit data first.
 
 Typical commands:
 
@@ -24,115 +59,23 @@ python scripts/daily_git_commits.py --since 2026-04-01 --until 2026-04-13
 python scripts/daily_git_commits.py --author heqidong --roots E:\Projects\Platforms\LowCode-All
 ```
 
-Use script output as raw work material only. Do not paste the generated Git report as the final answer, and do not state or imply in the final summary that the content was generated from Git commits or extracted from commit records. Convert commit subjects, commit bodies, changed files, repositories, and diff stats into the required objective Chinese daily summary.
+Use script output as raw material only. Do not paste the Git report as the final answer. Do not mention or imply in the summary that content came from Git commits. Convert commit data into the daily log format above.
 
-If the script finds no commits, say that no matching Git commit records were found for the selected date range, then ask the user to provide additional work content. Override `--author`, `--date`, `--since`, `--until`, or `--roots` from the user request instead of editing the script.
+If the script finds no commits, say so and ask the user for additional work content. Override `--author`, `--date`, `--since`, `--until`, or `--roots` from the user request instead of editing the script.
 
 ## If Work Content Is Missing
 
-If the user has not provided today's work content and has not asked to generate from Git commits, output exactly this text and stop:
+If the user has not provided work content and has not asked to generate from Git commits, output exactly this text and stop:
 
 ```text
 您好，作为您的工作总结撰写顾问，我会按照您的要求，为您撰写一份详细且客观的工作总结。请您先简单介绍一下今天的主要工作内容，我会从全局角度进行分析和总结，突出工作中的收获、挑战及改进空间。现在，请您开始讲述今天的工作情况吧。
 ```
 
-Do not add the three-item opening to this initialization response.
+Do not add any log sections to this initialization response.
 
-## Required Output Shape
+## Writing Style
 
-For a completed summary, use this structure:
-
-```text
-1、处理需求配置问题
-2、排查接口返回异常
-3、核对代码提交记录
-
-正文段落……
-```
-
-Rules:
-
-- Start with exactly three numbered lines: `1、`, `2、`, `3、`.
-- Put each numbered item on its own line.
-- Each item should be a complete Chinese sentence where possible, and must be under 20 Chinese characters, excluding the number and punctuation.
-- The opening three lines are the only allowed list or分点.
-- After the opening, write continuous paragraphs only.
-- Default to at least 300 Chinese characters when the user requests a detailed summary or gives enough work content.
-- Do not use personal pronouns such as“我”“我们”“本人”.
-- Do not use the Chinese character “了”.
-- Do not use order-linking words such as“首先”“其次”“然后”“最后”.
-- Do not use metaphors, exaggeration, slogans, or English except necessary technical terms.
-- Do not overemphasize implementation details; keep technical details only when needed to identify the work.
-
-## Content Coverage
-
-Cover these elements in prose:
-
-- Work content: completed handling, review, modification, checking, communication, or testing.
-- Work method: tools, documents, code review, comparison, debugging, testing, verification, or record checking.
-- Difficulties: unclear fields, missing data, inconsistent returns, dependency issues, import errors, failing tests, ambiguous rules, or incomplete inputs.
-- Resolution: concrete actions taken, such as locating paths, comparing data, adjusting mapping, replacing wording, running checks, or rechecking outputs.
-- Reflection: describe observed challenges, constraints, remaining gaps, and follow-up items, not value or benefit.
-
-## Meaning Without Evaluation
-
-If the user asks to include“工作意义”, translate that into objective context:
-
-| Instead of       | Write                                  |
-| ---------------- | -------------------------------------- |
-| 工作带来的价值   | 工作所处流程、背景、处理范围           |
-| 对系统的好处     | 涉及的模块、接口、数据或文案范围       |
-| 提升、优化、确保 | 核对、调整、补充、记录、复查           |
-| 结果影响         | 当前观察到的问题、约束、后续待核对内容 |
-
-Good:
-
-```text
-该项工作位于审批配置、流程运行和列表返回之间的衔接环节，处理内容包括字段来源核对、映射逻辑调整和空值场景复查。
-```
-
-Bad:
-
-```text
-该项工作提高了审批流程的稳定性，并为后续开发奠定了基础。
-```
-
-## Forbidden Wording
-
-Never use these exact words or phrases in the final summary:
-
-```text
-确保、提高、改善、增强、促进、优化、帮助、便于、有利于、成功、有效、高效、便捷、可靠、稳定、优质、使得、实现、达到、了
-```
-
-Also avoid hidden evaluation or result-benefit wording, including:
-
-```text
-更加清晰、更完整、更规范、更灵活、更合理、减少、降低、提升、完善、保障、奠定基础、产生影响、带来价值、发挥作用
-```
-
-Replace them with neutral action verbs:
-
-| Avoid              | Prefer                       |
-| ------------------ | ---------------------------- |
-| 确保 / 保障        | 核对、检查、复查             |
-| 提高 / 优化 / 改善 | 调整、修改、补充             |
-| 成功解决           | 找出并修复、定位并处理       |
-| 使日志更加清晰     | 修改日志文案、统一日志字段   |
-| 减少理解偏差       | 记录规则说明、补充核对项     |
-| 为后续奠定基础     | 形成记录、列出后续待处理事项 |
-
-## Pre-Response Checklist
-
-Before answering, scan the draft for:
-
-- The three opening items are separate lines, each item is a complete Chinese sentence where possible, and each item is under 20 Chinese characters.
-- No extra lists appear after the opening.
-- No forbidden exact words appear.
-- No hidden value claims appear.
-- No personal pronouns appear.
-- No Chinese character “了” appears.
-- No“首先/其次/然后/最后”appear.
-- Reflection describes facts, constraints, challenges, and follow-up work instead of benefits or impact.
-
-If any check fails, revise before output.
+- Natural, conversational Chinese.
+- Be specific about what was done, who was involved, and what was discussed.
+- Keep technical terms in their original form.
+- Avoid overly formal or bureaucratic language.
