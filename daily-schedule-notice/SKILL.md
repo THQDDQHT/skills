@@ -7,7 +7,7 @@ description: Use when generating the user's daily Chinese schedule notification 
 
 ## Purpose
 
-Generate a concise Simplified Chinese daily reminder for the user's monthly overtime, gym, meal, and meal-prep plan.
+Generate a concise Simplified Chinese daily reminder for the user's monthly overtime, gym, meal-prep plan, and diligence-time progress.
 
 This skill is meant to be invoked by OpenClaw from a scheduled task every day at 08:00. Prefer the bundled script for deterministic date calculation instead of reasoning from memory.
 
@@ -21,6 +21,31 @@ This skill is meant to be invoked by OpenClaw from a scheduled task every day at
 - Overtime-Saturday week workout days: Monday, Wednesday, Friday, Sunday.
 - Heavy meal prep days: Tuesday, Thursday, Sunday.
 - Workout days still include dinner or a post-workout meal. The rule is not "do not eat"; it is "do not do heavy batch meal prep".
+
+## Diligence Statistics
+
+The bundled script calls the external read-only diligence API and includes:
+
+- Current month's actual diligence hours.
+- Current month's target progress and delta.
+- Current year's target progress and delta.
+
+Default runtime URL:
+
+```text
+http://127.0.0.0:15000/api/external/diligence
+```
+
+The script uses the fixed Bearer Token configured in the script. Do not put the token in the notification text.
+
+For remote verification, override the URL:
+
+```bash
+python <skill-dir>/scripts/daily_schedule_notice.py \
+  --api-url https://cetworkovertime.q2qs.top/api/external/diligence
+```
+
+If the API fails, still return the daily schedule and add a short failure line under `勤奋统计`.
 
 ## Meal Rules
 
@@ -66,5 +91,6 @@ Use the script's plain-text output as the final notification. Do not add unrelat
   - Whether this is a normal week or an overtime-Saturday week.
   - Today's overtime, gym, meal, and meal-prep arrangement.
   - Current month's two overtime Saturdays.
+  - Diligence statistics for the current month and current year.
 - If today is an overtime Saturday, make `8h` overtime the most prominent item.
 - If today is a workout day, explicitly remind that the user can and should eat dinner or a simple post-workout meal.

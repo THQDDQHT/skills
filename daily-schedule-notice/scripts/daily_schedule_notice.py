@@ -6,14 +6,19 @@ from __future__ import annotations
 import argparse
 import calendar
 import json
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 
 WEEKDAY_CN = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 TZ = ZoneInfo("Asia/Shanghai")
+DEFAULT_DILIGENCE_API_URL = "http://127.0.0.0:15000/api/external/diligence"
+EXTERNAL_API_TOKEN = "xjiahfiahfaidhwadgaufgaudgwaufgvb"
+HTTP_TIMEOUT_SECONDS = 10
 
 
 @dataclass(frozen=True)
@@ -25,6 +30,15 @@ class DayPlan:
 
 
 @dataclass(frozen=True)
+class DiligenceNotice:
+    ok: bool
+    source: str | None
+    month_text: str
+    year_text: str
+    error: str | None = None
+
+
+@dataclass(frozen=True)
 class Notice:
     date: str
     month_week: int
@@ -33,6 +47,7 @@ class Notice:
     week_reason: str
     overtime_saturdays: list[str]
     plan: DayPlan
+    diligence: DiligenceNotice
     reminder: str
     text: str
 
@@ -49,6 +64,16 @@ def parse_args() -> argparse.Namespace:
         "--json",
         action="store_true",
         help="Output structured JSON instead of plain text.",
+    )
+    parser.add_argument(
+        "--api-url",
+        default=DEFAULT_DILIGENCE_API_URL,
+        help="Diligence statistics API URL.",
+    )
+    parser.add_argument(
+        "--skip-diligence",
+        action="store_true",
+        help="Do not call the diligence statistics API.",
     )
     return parser.parse_args()
 
@@ -187,9 +212,164 @@ def build_plan(day: date, overtime_week: bool) -> DayPlan:
     )
 
 
-def build_notice(day: date) -> Notice:
+def format_hours(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "0h"
+    text = f"{number:.1f}".rstrip("0").rstrip(".")
+    return f"{text}h"
+
+
+def format_delta(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "0h"
+    if number > 0:
+        return f"超出 {format_hours(number)}"
+    if number < 0:
+        return f"还差 {format_hours(abs(number))}"
+    return "刚好达标"
+
+
+def format_percent(hours: Any, target: Any) -> str:
+    try:
+        hours_number = float(hours)
+        target_number = float(target)
+    except (TypeError, ValueError):
+        return "0%"
+    if target_number <= 0:
+        return "0%"
+    return f"{hours_number / target_number * 100:.1f}%"
+
+
+def fetch_diligence_data(api_url: str) -> dict[str, Any]:
+    request = Request(
+        api_url,
+        headers={
+            "Authorization": f"Bearer {EXTERNAL_API_TOKEN}",
+            "Accept": "application/json",
+            "User-Agent": "daily-schedule-notice/1.0",
+        },
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
+            raw = response.read().decode("utf-8")
+    except HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(format_http_error(exc.code, body)) from exc
+    except URLError as exc:
+        raise RuntimeError(f"网络请求失败：{exc.reason}") from exc
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("接口返回的不是有效 JSON") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError("接口返回结构不是对象")
+    return data
+
+
+def format_http_error(status_code: int, body: str) -> str:
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        data = None
+
+    if isinstance(data, dict):
+        message = data.get("error") or data.get("title") or data.get("detail")
+        error_name = data.get("error_name") or data.get("error_code")
+        if message and error_name:
+            return f"HTTP {status_code}: {message}（{error_name}）"
+        if message:
+            return f"HTTP {status_code}: {message}"
+
+    compact_body = " ".join(body.split())
+    if len(compact_body) > 120:
+        compact_body = compact_body[:117] + "..."
+    return f"HTTP {status_code}: {compact_body}"
+
+
+def empty_diligence_notice(error: str) -> DiligenceNotice:
+    return DiligenceNotice(
+        ok=False,
+        source=None,
+        month_text="当月加班时长：暂未获取到统计数据。",
+        year_text="年度目标完成：暂未获取到统计数据。",
+        error=error,
+    )
+
+
+def build_diligence_notice(day: date, api_url: str, skip: bool = False) -> DiligenceNotice:
+    if skip:
+        return empty_diligence_notice("已跳过勤奋统计 API 请求")
+
+    try:
+        data = fetch_diligence_data(api_url)
+    except RuntimeError as exc:
+        return empty_diligence_notice(str(exc))
+
+    if not data.get("ok"):
+        return empty_diligence_notice(str(data.get("error") or "接口返回失败"))
+
+    years = data.get("years")
+    if not isinstance(years, dict):
+        return empty_diligence_notice("接口响应缺少 years 对象")
+
+    year_data = years.get(str(day.year))
+    if not isinstance(year_data, dict):
+        return empty_diligence_notice(f"接口响应中没有 {day.year} 年统计")
+
+    months = year_data.get("months")
+    if not isinstance(months, list):
+        return empty_diligence_notice(f"接口响应中没有 {day.year} 年月份列表")
+
+    month_data = next(
+        (
+            item
+            for item in months
+            if isinstance(item, dict)
+            and item.get("year") == day.year
+            and item.get("month") == day.month
+        ),
+        None,
+    )
+    if not month_data:
+        month_data = {
+            "hours": 0,
+            "target": data.get("target_hours", 36),
+            "delta": -float(data.get("target_hours", 36)),
+            "entries": 0,
+        }
+
+    month_text = (
+        f"当月加班时长：{format_hours(month_data.get('hours'))} / "
+        f"目标 {format_hours(month_data.get('target'))}，"
+        f"完成 {format_percent(month_data.get('hours'), month_data.get('target'))}，"
+        f"{format_delta(month_data.get('delta'))}，"
+        f"记录 {month_data.get('entries', 0)} 条。"
+    )
+    year_text = (
+        f"年度目标完成：{format_hours(year_data.get('total_hours'))} / "
+        f"{format_hours(year_data.get('total_target'))}，"
+        f"完成 {format_percent(year_data.get('total_hours'), year_data.get('total_target'))}，"
+        f"{format_delta(year_data.get('total_delta'))}。"
+    )
+
+    return DiligenceNotice(
+        ok=True,
+        source=str(data.get("source") or ""),
+        month_text=month_text,
+        year_text=year_text,
+    )
+
+
+def build_notice(day: date, api_url: str, skip_diligence: bool = False) -> Notice:
     overtime_week, week_reason = is_overtime_week(day)
     plan = build_plan(day, overtime_week)
+    diligence = build_diligence_notice(day, api_url, skip_diligence)
     overtime_saturdays = overtime_saturdays_for_month(day.year, day.month)
     week_type = "加班周" if overtime_week else "普通周"
     weekday = WEEKDAY_CN[day.weekday()]
@@ -210,6 +390,11 @@ def build_notice(day: date) -> Notice:
             f"本月加班周六：{'、'.join(format_dates(overtime_saturdays))}",
             "月度加班预估：工作日约20h + 两个周六16h = 36h。",
             "",
+            "勤奋统计：",
+            f"- {diligence.month_text}",
+            f"- {diligence.year_text}",
+            *([f"- 获取状态：{diligence.error}"] if diligence.error else []),
+            "",
             f"提醒：{reminder}",
         ]
     )
@@ -222,6 +407,7 @@ def build_notice(day: date) -> Notice:
         week_reason=week_reason,
         overtime_saturdays=format_dates(overtime_saturdays),
         plan=plan,
+        diligence=diligence,
         reminder=reminder,
         text=text,
     )
@@ -230,7 +416,7 @@ def build_notice(day: date) -> Notice:
 def main() -> None:
     args = parse_args()
     day = parse_date(args.date)
-    notice = build_notice(day)
+    notice = build_notice(day, args.api_url, args.skip_diligence)
     if args.json:
         print(json.dumps(asdict(notice), ensure_ascii=False, indent=2))
         return
