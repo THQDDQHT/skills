@@ -1,0 +1,4 @@
+interface:
+  display_name: "作息通知"
+  short_description: "每天早上生成加班、健身、吃饭和备餐安排提醒，用于定时通知"
+  default_prompt: "使用 $daily-schedule-notice 生成今天早上8点的作息通知。"
