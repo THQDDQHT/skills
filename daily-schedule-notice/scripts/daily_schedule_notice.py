@@ -331,7 +331,6 @@ def build_diligence_notice(day: date, api_url: str, skip: bool = False) -> Dilig
             item
             for item in months
             if isinstance(item, dict)
-            and item.get("year") == day.year
             and item.get("month") == day.month
         ),
         None,
@@ -351,11 +350,12 @@ def build_diligence_notice(day: date, api_url: str, skip: bool = False) -> Dilig
         f"{format_delta(month_data.get('delta'))}，"
         f"记录 {month_data.get('entries', 0)} 条。"
     )
+    yearly_target = 36 * 12
     year_text = (
         f"年度目标完成：{format_hours(year_data.get('total_hours'))} / "
-        f"{format_hours(year_data.get('total_target'))}，"
-        f"完成 {format_percent(year_data.get('total_hours'), year_data.get('total_target'))}，"
-        f"{format_delta(year_data.get('total_delta'))}。"
+        f"{format_hours(yearly_target)}，"
+        f"完成 {format_percent(year_data.get('total_hours'), yearly_target)}，"
+        f"{format_delta(year_data.get('total_hours') - yearly_target)}。"
     )
 
     return DiligenceNotice(
