@@ -11,6 +11,9 @@
     python daily_git_commits.py --since 2026-04-01       # 指定起始日期到今天
     python daily_git_commits.py --since 2026-04-01 --until 2026-04-13  # 指定日期范围
     python daily_git_commits.py --output report.md       # 输出到文件
+
+扫描目录、作者等配置集中在 skill 根目录的 config.json 中，无需改代码。
+配置优先级（从高到低）：命令行参数 > config.json > 代码内置默认值。
 """
 
 import subprocess
@@ -21,6 +24,11 @@ import argparse
 from datetime import datetime, timedelta
 from collections import defaultdict
 
+# 脚本所在目录加入 sys.path，保证独立运行时也能 import common
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from common import load_config  # noqa: E402
+
 # 解决 Windows 控制台 GBK 编码问题
 if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -28,18 +36,19 @@ if sys.stderr.encoding != "utf-8":
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 
-# ==================== 配置区域 ====================
+# ==================== 配置区域（内置默认值，config.json 优先） ====================
 
-# Git 用户名（author）
+# Git 用户名（author），config.json 的 git.author 可覆盖
 GIT_AUTHOR = "heqidong"
 
-# 要扫描的根目录列表，脚本会递归查找其中所有 Git 仓库
+# 要扫描的根目录列表，脚本会递归查找其中所有 Git 仓库；
+# config.json 的 scan_roots 可覆盖
 SCAN_ROOTS = [
     r"E:\Projects\Platforms\LowCode-All",
     # 如需添加更多目录，在此处追加即可
 ]
 
-# 最大递归深度（避免扫描过深）
+# 最大递归深度（避免扫描过深），config.json 的 git.max_depth 可覆盖
 MAX_DEPTH = 4
 
 # ==================== 配置区域结束 ====================
@@ -313,7 +322,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--author", default=GIT_AUTHOR, help=f"Git 用户名 (默认: {GIT_AUTHOR})"
+        "--author", default=None, help="Git 用户名 (默认取 config.json 或内置值)"
     )
     parser.add_argument(
         "--date", default=None, help="指定日期，格式 YYYY-MM-DD (默认: 今天)"
@@ -336,7 +345,8 @@ def main():
 
     args = parser.parse_args()
 
-    author = args.author
+    config = load_config()
+    author = args.author if args.author else config.get("git", {}).get("author") or GIT_AUTHOR
 
     # 确定日期范围
     # 注意：git --after/--before 是「严格不含边界」的，所以需要：
@@ -371,7 +381,8 @@ def main():
         before_dt = datetime.now() + timedelta(days=1)
         before_date = before_dt.strftime("%Y-%m-%d")
 
-    scan_roots = args.roots if args.roots else SCAN_ROOTS
+    scan_roots = args.roots if args.roots else (config.get("scan_roots") or SCAN_ROOTS)
+    max_depth = config.get("git", {}).get("max_depth") or MAX_DEPTH
 
     print(f"🔍 扫描目录: {', '.join(scan_roots)}")
     print(f"👤 用户: {author}")
@@ -380,7 +391,7 @@ def main():
 
     # 1. 扫描所有 Git 仓库
     print("📂 正在扫描 Git 仓库...")
-    repos = find_git_repos(scan_roots)
+    repos = find_git_repos(scan_roots, max_depth)
     print(f"   找到 {len(repos)} 个仓库")
     print()
 

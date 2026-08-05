@@ -1,0 +1,16 @@
+{
+  "scan_roots": ["E:\\Projects\\Platforms\\LowCode-All"],
+  "max_chars": 2000,
+  "git": {
+    "author": "heqidong",
+    "max_depth": 4
+  },
+  "claude": {
+    "history_dir": "",
+    "max_chars": null
+  },
+  "codex": {
+    "codex_home": "",
+    "max_chars": null
+  }
+}
