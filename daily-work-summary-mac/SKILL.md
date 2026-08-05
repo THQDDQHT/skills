@@ -65,7 +65,7 @@ python3 scripts/daily_git_commits.py --author heqidong --roots /Users/torchz/Cet
 
 ### Claude Code Conversation Source
 
-Use the bundled script `scripts/daily_claude_conversations.py` to extract local Claude Code transcripts (stored under `~/.claude/projects`). It emits user messages and assistant text only, skipping thinking blocks, tool calls, tool results, system injections, and sensitive values.
+Use the bundled script `scripts/daily_claude_conversations.py` to extract local Claude Code main-session transcripts (stored under `~/.claude/projects`). It emits user messages and assistant text only, skipping subagent sidechains, thinking blocks, tool calls, tool results, system injections, and sensitive values.
 
 Typical commands:
 
@@ -78,7 +78,7 @@ python3 scripts/daily_claude_conversations.py --dir /Users/torchz/.claude/projec
 python scripts/daily_claude_conversations.py --json --output report.json
 ```
 
-Transcript search order: `--dir` argument, then `CLAUDE_CONFIG_DIR/projects`, then `~/.claude/projects`. Records are selected by the transcript `cwd` field (falling back to the encoded project folder name) relative to the project roots.
+Transcript search order: `--dir` argument, then `CLAUDE_CONFIG_DIR/projects`, then `~/.claude/projects`. Records are selected by the transcript `cwd` field (falling back to the encoded project folder name) relative to the project roots. Files under `subagents/` and records marked with `isSidechain` or `agentId` are excluded.
 
 ### Codex Conversation Source
 

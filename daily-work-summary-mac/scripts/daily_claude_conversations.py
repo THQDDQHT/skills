@@ -9,6 +9,7 @@
 转录内容规则：
 - 只保留 type 为 user / assistant / message 的消息，并按其 message.id 去重
 - 只保留文本块（text / input_text），跳过 thinking、tool_use、tool_result、image 等块
+- 跳过 subagents 目录以及带 isSidechain / agentId 标记的子代理记录
 - 跳过 isMeta 的系统注入消息（如 local-command 提示）
 - 按 message.cwd 字段过滤项目范围，缺失时用项目目录名（路径编码形式）匹配
 - 输出前对密钥、Token、私钥等敏感信息脱敏
@@ -107,6 +108,14 @@ def extract_message_text(content):
     return ""
 
 
+def iter_main_transcript_paths(history_dir):
+    """递归查找主会话转录文件，跳过 Claude Code 的 subagents 目录。"""
+    for path in sorted(history_dir.rglob("*.jsonl")):
+        if "subagents" in path.parts:
+            continue
+        yield path
+
+
 def scan_file(path, since, until, roots, max_chars=2000):
     """
     扫描单个转录文件，返回事件列表。
@@ -135,6 +144,10 @@ def scan_file(path, since, until, roots, max_chars=2000):
         # 只处理消息类记录；ai-title / last-prompt / mode / attachment 等跳过
         msg_type = obj.get("type")
         if msg_type not in ("user", "assistant", "message"):
+            continue
+
+        # 子代理消息可能出现在独立 sidechain 文件，也可能混入其他转录文件。
+        if obj.get("isSidechain") or obj.get("agentId"):
             continue
 
         # 系统注入的消息（local-command 提示等）跳过
@@ -231,7 +244,7 @@ def main():
     seen = set()
     file_count = 0
 
-    for path in sorted(history_dir.rglob("*.jsonl")):
+    for path in iter_main_transcript_paths(history_dir):
         file_count += 1
         for ev in scan_file(path, since, until, roots, max_chars):
             # 去重：同一会话同角色同文本的消息只保留一条
