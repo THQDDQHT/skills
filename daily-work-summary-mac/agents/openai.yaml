@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mac 日报总结"
+  short_description: "从 macOS 本地 Git 与对话记录生成中文日报"
+  default_prompt: "使用 $daily-work-summary-mac 汇总今天的 Git 提交和本地对话记录，生成中文日报。"
