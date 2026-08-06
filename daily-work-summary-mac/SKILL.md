@@ -1,6 +1,6 @@
 ---
 name: daily-work-summary-mac
-description: Use on macOS when the user asks for a Chinese daily work summary, work log, day-end review, or a summary generated from daily Git commits and local Claude Code / Codex conversation records under /Users/torchz/CetWorkspace. Output is a plain text log with "工作内容", "工作思考", and "勤奋时间" sections. Includes bundled scripts for Git commit extraction, Claude Code / Codex conversation extraction, and diligent time calculation.
+description: Use on macOS when the user asks for a Chinese daily work summary, work log, day-end review, or a summary generated from daily Git commits and local Claude Code / Codex / Kimi Code conversation records under /Users/torchz/CetWorkspace. Output is a plain text log with "工作内容", "工作思考", and "勤奋时间" sections. Includes bundled scripts for Git commit extraction, Claude Code / Codex / Kimi Code conversation extraction, and diligent time calculation.
 ---
 
 # Daily Work Summary for macOS
@@ -48,7 +48,7 @@ Generate a plain text daily log following this structure:
 
 ## Record Sources
 
-By default, run **all three** extractors before writing a daily summary: Git commits, local Claude Code conversations, and local Codex conversations. If the user explicitly asks for Git records only, use Git-only mode and skip the conversation extractors. Conversation records only read local files and never call any remote API.
+By default, run **all four** extractors before writing a daily summary: Git commits, local Claude Code conversations, local Codex conversations, and local Kimi Code conversations. If the user explicitly asks for Git records only, use Git-only mode and skip the conversation extractors. Conversation records only read local files and never call any remote API.
 
 ### Git Commit Source
 
@@ -97,6 +97,23 @@ python scripts/daily_codex_sessions.py --json --output report.json
 
 Data search order: `--home` argument, then `CODEX_HOME`, then `~/.codex`. Records are selected by the session `cwd` field relative to the project roots.
 
+### Kimi Code Conversation Source
+
+Use the bundled script `scripts/daily_kimi_sessions.py` to extract local Kimi Code sessions (stored under `~/.kimi-code`). It reads main-session wire files under `~/.kimi-code/sessions/<workspace>/session_*/agents/main/wire.jsonl`, emits user messages and assistant text only, skipping subagent wires (`agents/agent-*`), thinking blocks, tool calls/results, system injections, and background-task notifications.
+
+Typical commands:
+
+```bash
+python scripts/daily_kimi_sessions.py
+python scripts/daily_kimi_sessions.py --date 2026-04-13
+python scripts/daily_kimi_sessions.py --since 2026-04-01 --until 2026-04-13
+python3 scripts/daily_kimi_sessions.py --roots /Users/torchz/CetWorkspace
+python3 scripts/daily_kimi_sessions.py --home /Users/torchz/.kimi-code   # 指定 Kimi Code 数据目录
+python scripts/daily_kimi_sessions.py --json --output report.json
+```
+
+Data search order: `--home` argument, then `KIMI_CODE_HOME`, then `~/.kimi-code`. Each session's working directory is read from `state.json`, falling back to `session_index.jsonl` / `workspaces.json`; only sessions under the project roots are scanned.
+
 ### Using the Output
 
 Use script output as raw material only. Do not paste any generated report as the final answer. Do not mention or imply in the summary that content came from Git commits or conversation transcripts. Convert all record data into the daily log format above, following these evidence rules:
@@ -128,22 +145,27 @@ All scan directories and per-source settings live in `config.json` at the skill 
   "codex": {
     "codex_home": "",
     "max_chars": null
+  },
+  "kimi": {
+    "kimi_home": "",
+    "max_chars": null
   }
 }
 ```
 
-- `scan_roots`: root directories scanned by all three extractors (Git, Claude Code, Codex); `--roots` overrides it.
-- `max_chars`: max characters per message for both conversation extractors. A source's `max_chars` of `null` (or missing) inherits the top-level value; a non-null value overrides it. Set a per-source value only when that source needs a different cap.
+- `scan_roots`: root directories scanned by all four extractors (Git, Claude Code, Codex, Kimi Code); `--roots` overrides it.
+- `max_chars`: max characters per message for all conversation extractors. A source's `max_chars` of `null` (or missing) inherits the top-level value; a non-null value overrides it. Set a per-source value only when that source needs a different cap.
 - `git.author`: Git commit author; `--author` overrides it.
 - `git.max_depth`: max recursion depth when locating Git repos.
 - `claude.history_dir`: Claude Code transcript directory; empty string means auto-discovery (`CLAUDE_CONFIG_DIR`, then `~/.claude/projects`); `--dir` overrides it.
 - `codex.codex_home`: Codex data directory; empty string means auto-discovery (`CODEX_HOME`, then `~/.codex`); `--home` overrides it.
+- `kimi.kimi_home`: Kimi Code data directory; empty string means auto-discovery (`KIMI_CODE_HOME`, then `~/.kimi-code`); `--home` overrides it.
 
-Configuration priority (high to low): command-line arguments > environment variables (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) > `config.json` > built-in defaults.
+Configuration priority (high to low): command-line arguments > environment variables (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `KIMI_CODE_HOME`) > `config.json` > built-in defaults.
 
 ## If Work Content Is Missing
 
-If the user has not provided work content and has not asked to generate from daily records (Git commits, Claude Code, or Codex conversations), output exactly this text and stop:
+If the user has not provided work content and has not asked to generate from daily records (Git commits, Claude Code, Codex, or Kimi Code conversations), output exactly this text and stop:
 
 ```text
 您好，作为您的工作总结撰写顾问，我会按照您的要求，为您撰写一份详细且客观的工作总结。请您先简单介绍一下今天的主要工作内容，我会从全局角度进行分析和总结，突出工作中的收获、挑战及改进空间。现在，请您开始讲述今天的工作情况吧。

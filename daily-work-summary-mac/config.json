@@ -12,5 +12,9 @@
   "codex": {
     "codex_home": "",
     "max_chars": null
+  },
+  "kimi": {
+    "kimi_home": "",
+    "max_chars": null
   }
 }
